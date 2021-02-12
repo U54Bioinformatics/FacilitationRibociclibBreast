@@ -1,0 +1,416 @@
+rm(list=ls())
+require(deSolve) ;require(ggplot2) ; require(tidyr) ; require(dplyr) ; require(data.table) 
+require(Matrix); require(fda); library("readr"); require(boot);
+require(stringr)
+load(file="/Users/jason/Dropbox/Cancer_pheno_evo/data/Lab Facilitation/parameterised LH full pars and core data for simulation studies.RData")     
+
+
+#Load data 
+everolimus_dd <- data.table(read.csv(file = "~/Dropbox/Vince data/processed data/Sorted_everolimus_coculture_4-10-19_5-2-19.csv"))
+new_ribo_dd <- data.table(read.csv(file="~/Dropbox/Vince data/processed data/riboadavo/Sorted_190711_start_ribociclib_exp_analyzed_8-13-19.csv"))
+ribo_dd <- data.table(read.csv(file="~/Dropbox/Vince data/processed data/riboadavo/Sorted_Ribo_Adavo.csv"))
+#calc_params <- data.table(read.csv(file = "~/Dropbox/Vince data/Fitted Model Params/Everolimus Params/Final6Models_params.csv"))
+#top5 <- data.table(read.csv(file="~/Dropbox/Vince data/Fitted Model Params/Top5PureCultureParams.csv"))
+#happycells_dd <- data.table(read.csv(file="~/Dropbox/Vince data/Fitted Model Params/GrowthFacilitation2.csv"))
+# #Function to determine what model will be used in the loop
+# Model <- function(model_nm){
+#   switch(model_nm, 
+#          "CE"=CE_benefits,
+#          "CE_GC"=CE_GC_benefits,
+#          "CE_alpha"=CE_alpha_benefits,
+#          "Growth_Facilitation"=Growth_Facilitation_benefits)
+# }
+
+#Function to determine what experimental data will be used
+Experiment <- function(type){
+  switch(type,
+         "ribo" = ribo_dd,
+         "everolimus" = everolimus_dd,
+         "new_ribo" = new_ribo_dd)
+}
+
+#Select Data to use... it is in a semi wide format (not long nor a dense matrix)
+desiredexp <- "new_ribo"#"everolimus" #options: "ribo", "everolimus", "new_ribo"
+Experiment_Data <- Experiment(desiredexp) ; if(desiredexp == "ribo"){ Experiment_Data <- Experiment_Data[Drug == "ribociclib"] }
+Experiment_Data <- Experiment_Data#[Day!=0]
+Experiment_Data[,Day:=Day - min(Day)]
+Experiment_Data[,Compostition:="polyculture"]
+Experiment_Data[Resistance%in%c("100% sensitive","100% resistant"),Compostition:="monoculture"]
+#Experiment("ribo")[Drug == "ribociclib"]
+
+# uniquely label each experimental unit (one microcosm of cells)
+experim_unit <- unique(Experiment_Data%>%dplyr::select(DoseNum, Replicate ,    Resistance,Compostition))
+experim_unit[,experim_unit:=1:nrow(experim_unit)]
+Experiment_Data <- merge(Experiment_Data,experim_unit,by=c("DoseNum", "Replicate" ,    "Resistance", "Compostition"))
+Experiment_Data <- Experiment_Data[order(experim_unit)]  #plot(Experiment_Data$X,Experiment(desiredexp)$X)
+plot(Experiment_Data$DoseNum,ylab="dose")
+plot(as.numeric(Experiment_Data$Resistance),ylab="response")
+plot(Experiment_Data$Replicate,ylab="replicate")
+
+# extract initial conditions and metadata
+lu_table<-data.table(Experiment_Data[Day==0]%>%group_by(Resistance, DoseNum)%>%mutate(N=mean(SCellNum),A=mean(RCellNum),"Z_N_"=0,"Z_A_"=0,"S_N_"=0,"S_A_"=0,E=0))
+#setnames(lu_table,old=c("DoseNum","Replicate"),new=c("dose","replicate"))
+
+ndose <- length(unique(Experiment_Data$DoseNum))
+doses_seq <- unique(Experiment_Data$DoseNum)#rep(0:1,each=1)          #lu_table[, ID:=(1:nrow(lu_table))]    #lu_table <- lu_table[order(ID)]
+
+# 1008 obs of: 2 states , 3 compositions , 8 doses 3 reps 7 times    = 2*3*8*3*7
+# put initial data in long format ... useful for plotting .. contains metadata for only inits
+
+# ode initial conditions and indexing
+inits <- y0 <- c("N_"=lu_table$N,  "A_"=lu_table$A,
+                 "Z_N_"=rep(0,length(lu_table$N)) ,
+                 "Z_A_"=rep(0,length(lu_table$A)),
+                 "S_N_"=rep(0,length(lu_table$N)),
+                 "S_A_"=rep(0,length(lu_table$A)),
+                 "E_"=lu_table$E )
+plot(y0,Info$Initial_Condition);         if(!all(y0==Info$Initial_Condition)){print("DANGER:: Wrong data entry. \n initial conditions not being parsed correctly to stan")}
+plot(lu_table$DoseNum,Info[State=="N"]$DoseNum);         if(!all(lu_table$DoseNum==Info[State=="N"]$DoseNum)){print("DANGER:: Wrong data entry. \n dose data not being parsed correctly to stan. \n mismatch identified")}
+
+
+# Simulation evaluation times (hours) for 21 days
+end.day <- max(Experiment_Data$Day)
+times   <- seq(0,end.day,by=1)   
+
+### Reformat data for analysis
+fit.dd <- data.table(Experiment_Data%>%
+                       dplyr::select(X,Day, SCellNum,RCellNum,
+                                     Replicate,Compostition,DoseNum,experim_unit)%>%
+                       gather(StateOld,value,SCellNum,RCellNum))
+#fit.dd$StateOld
+
+# Note that A in the data = sum A+ Z_A
+fit.dd[,State:="A"]
+fit.dd[StateOld=="SCellNum",State:="N"]
+fit.dd <- data.table(merge(fit.dd,Info,by=c("DoseNum","Replicate","experim_unit","Compostition","State")) )
+fit.dd <- fit.dd[order(ode_ID,Day)]
+fit.dd[,State2:="TotA"]
+fit.dd[State=="N",State2:="TotN"]
+
+Info[, isNpresent:=TRUE];Info[, isApresent:=TRUE]
+Info[experim_unit%in%which(y0[index_N]==0), isNpresent:=FALSE]
+Info[experim_unit%in%which(y0[index_A]==0), isApresent:=FALSE]
+Info$State <- gsub("N_","N",    gsub("A_","A", Info$State))
+  
+pars.outlong <- data.table(gather(pars.out,par,val,r_RbyN:k_RbyN))
+pars.outlong$par <- factor(pars.outlong$par, levels = rev(c("gamma_RbyN","k_RbyN","r_RbyN","lambda_RbyN","B_RbyN","delta_SRbySN","delta_RbyN")))
+ggplot(pars.outlong, aes(y=log(val),x= par ,col=par,fill=par) ) + geom_violin()+theme_classic()
+
+ggplot(pars.outlong[!par%in%c("delta_SRbySN","delta_RbyN")], aes(y=log(val),x= par ,col=par,fill=par) ) + geom_violin(scale="width",bw=.015)+theme_classic(base_size = 19)+
+  theme(aspect.ratio=1,legend.position = "none")+coord_flip()+
+  labs(x="Process",y="Resistant cell performance \n (relative to sensitive cells)")+
+  geom_hline(yintercept=0,linetype=2)+
+  scale_x_discrete(labels=rev(c("Facilitation \n contribution","Competition \n effect","Division \n (Baseline)","Quiescence \n (Baseline)","Drug sensitivity")))+
+  scale_y_continuous(breaks=log(c(0.125,0.25,0.5,1,2,4,8)),labels=c(0.125,0.25,0.5,1,2,4,8))
+
+# extract max likelihood param set
+par.vec_mcmc_max <- as.vector(unlist(pars.out[lp__==max(lp__)]))
+names(par.vec_mcmc_max) <-colnames(pars.out)
+#par.vec_mcmc_i <- as.vector(unlist(pars.out[1]))
+#names(par.vec_mcmc_i) <-colnames(pars.out)
+
+# Adjust param naming
+pars1<-par.vec_mcmc_max #par.vec_mcmc_i
+names(pars1)[names(pars1)=="k_N"] <- "K_N"
+names(pars1)[names(pars1)=="k_A"] <- "K_A"
+names(pars1)[names(pars1)=="B_N"] <- "K_q_N"
+names(pars1)[names(pars1)=="B_A"] <- "K_q_A"
+
+
+
+
+parstt <- pars1
+#rho <- 1
+#alpha <- 2
+luinter<-expand.grid(rho=seq(0,1,length=5),alpha=  10^(-3:2),phi=1)
+
+
+### Run simulations varying competition and facilitation
+res <- rbindlist(lapply(1:nrow(luinter),function(i){
+  rho<-luinter[i,]$rho
+  alpha<-luinter[i,]$alpha
+  phi<-luinter[i,]$phi
+  
+parstt[names(parstt)=="gamma_N"] <- rho*pars1[names(parstt)=="gamma_N"]
+parstt[names(parstt)=="gamma_A"] <- rho*pars1[names(parstt)=="gamma_A"]
+
+parstt[names(parstt)=="K_N"] <- (alpha)*pars1[names(parstt)=="K_N"] 
+parstt[names(parstt)=="K_A"] <- pars1[names(parstt)=="K_A"]
+
+parstt[names(parstt)=="r_N"] <- pars1[names(parstt)=="r_N"] 
+parstt[names(parstt)=="r_A"] <- phi*pars1[names(parstt)=="r_A"]
+
+
+#delta_carry<-(parstt[names(parstt)=="K_N"] + parstt[names(parstt)=="K_A"] )/(pars1[names(parstt)=="K_N"] + pars1[names(parstt)=="K_A"] )
+#parstt[names(parstt)=="K_N"] <- parstt[names(parstt)=="K_N"]/delta_carry
+#parstt[names(parstt)=="K_A"] <- parstt[names(parstt)=="K_A"]/delta_carry
+
+
+
+CompA_relB <- parstt[names(parstt)=="K_A"]/parstt[names(parstt)=="K_N"]
+#FacilA_relB <- parstt[names(parstt)=="gamma_A"] / parstt[names(parstt)=="gamma_N"]
+
+# simuate ode add relevant ode state data to merge withExperimental metadata 
+out_N_N <- data.table(ode(y=y0, parms=parstt, times=times, func=dY_fun,doses=doses))
+out_long0 <- data.table(gather(out_N_N,Variable,y0,-c(time)))
+out_long0[,State:="E"]# Variable%in%c(paste0("N_",1:length(index_N) ))
+out_long0[Variable%in%c(paste0("N_",1:length(index_N) )),State:="N"];out_long0[Variable%in%c(paste0("Z_N_",1:length(index_N) )),State:="Z_N"];out_long0[Variable%in%c(paste0("S_N_",1:length(index_N) )),State:="S_N"]
+out_long0[Variable%in%c(paste0("A_",1:length(index_N) )),State:="A"];out_long0[Variable%in%c(paste0("Z_A_",1:length(index_A) )),State:="Z_A"];out_long0[Variable%in%c(paste0("S_A_",1:length(index_A) )),State:="S_A"]
+out_long0[, experim_unit := as.numeric(str_extract(Variable, "([0-9]+)"))]
+out_long0$State <- factor(out_long0$State, levels = c("N","A","Z_N", "Z_A", "S_N", "S_A","E"))
+out_long0[,experim_unit:=as.numeric(as.character(experim_unit))]
+
+out_long0[,Variable:=NULL]
+out_long <- merge(out_long0,Info,by= c("State","experim_unit"))[order(State,experim_unit,time,DoseNum)][Replicate==1]
+out_long$rho <- rho
+out_long$alpha <- alpha
+out_long$phi <- phi
+
+out_long$CompA_relB <- CompA_relB
+out_longsum <- data.table(gather(out_long %>% 
+  dplyr::select(-c(Initial_Condition, ode_ID)) %>% 
+  spread( State,y0)%>%group_by(experim_unit, time) %>%
+  dplyr::mutate(TotN= N + S_N + Z_N, TotA= A + S_A + Z_A ) , State,y0,A:TotA))
+
+#out_long$FacilA_relB <- FacilA_relB
+# ggplot(data= out_long, aes( y= log(1+y0), x= time , col= experim_unit,group=experim_unit ,linetype=interaction(isNpresent,isApresent)) )+
+#   geom_line()+
+#   theme_classic()+ labs(y= "State", x= "Time (days)")+
+#   facet_wrap(Compostition ~ State,scales="free")#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+return(out_longsum)
+}))
+
+finabund_res2 <- unique(res[time==max(time)][State!="E"]%>%dplyr::select(-c(experim_unit,Replicate)))
+finabund_res <- unique(res[Replicate==1][time==max(time)][State!="E"])
+finabund_res[,subclonespresent:="both"]
+finabund_res[isNpresent==FALSE,subclonespresent:="A"]
+finabund_res[isApresent==FALSE,subclonespresent:="N"]
+finabund_res[,is_Totstate:=FALSE]
+finabund_res[State%in%c("TotA","TotN"),is_Totstate:=TRUE]
+
+finabund_res<-data.table( finabund_res%>%group_by(Replicate,experim_unit,subclonespresent,rho,alpha,phi,CompA_relB,DoseNum)%>%mutate(Total=sum(y0*TRUE)) )
+
+# finabund_res[Compostition=="monoculture"][DoseNum==0][rho==0][Replicate==1]
+# finabund_res[DoseNum==0][rho==0][Replicate==1]
+# 
+# finabund_res[Compostition=="polyculture"][isApresent==TRUE][DoseNum==0][rho==0]
+
+
+fit.dd_tt<-fit.dd
+fit.dd_tt$State<-fit.dd_tt$State2
+ggplot( res[Compostition=="polyculture"][rho%in%c(0.5,1)][alpha==1][State%in%c("TotA","TotN","E")],aes(y=log(1+y0) ,x=time,col=State ,linetype=as.factor(-rho),group=interaction(rho,State),fill=State))+
+  geom_line()+facet_grid(~DoseNum)
+
+ggplot( res[Compostition=="polyculture"][rho%in%c(0.0,0.5,1)][alpha==1][time==max(time)][State%in%c("TotA","TotN","E")],aes(y=log(1+y0) ,x=DoseNum))+
+  geom_smooth(data=res[Compostition=="polyculture"][rho%in%c(1)][alpha==1][time==max(time)][State%in%c("TotA","TotN","E")],
+se=F,method="gam",formula=y~s(x,k=5),col="black",aes(size=2.5,group=interaction(rho,State)))+ 
+  
+  geom_smooth(se=F,method="gam",formula=y~s(x,k=5),aes(col=State , fill=State,size=(rho),group=interaction(rho,State)))+ scale_size(name="Facilitation (%)", breaks=c(0,0.5,1),labels = 100*(c(0,0.5,1)), range = c(0.5, 1.4))+facet_grid(~State)+theme_classic()+
+  #geom_line(aes(col=State , fill=State,size=(rho),group=interaction(rho,State)))+ scale_size(name="Facilitation (%)", breaks=c(0,0.5,1),labels = 100*(c(0,0.5,1)), range = c(0.5, 1.4))+facet_grid()+theme_classic()+
+  geom_point(data=fit.dd_tt[Day==21][Compostition=="polyculture"], aes(y=log(1+value) ,x=DoseNum ,fill=State2 ),colour="black",pch=21,size=2.5)+
+  scale_color_manual(values=c("green","red","blue"))+  scale_fill_manual(values=c("green","red","blue"))+
+  geom_hline(yintercept = log(1+max(y0) ),col="slategrey", linetype="dashed",size=1.5)+theme(aspect.ratio=1)+
+  labs(y="State",x="Drug dose")+scale_y_continuous(labels=
+                                                     function(x) format(exp(x)-1, scientific = FALSE)
+                                                     #c(0,1e0,1e1,1e2,1e3,1e4,100000,1e6,1e7,1e8)
+                                                     ,breaks=log(1+c(0,1e0,1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8)))
+
+cell.labs <- c("Resistant", "Sensitive")
+names(cell.labs) <- c("TotA","TotN")
+ggplot( res[Compostition=="polyculture"][rho%in%c(0.0,0.5,1)][alpha==1][time==max(time)][State%in%c("TotA","TotN")],aes(y=log(1+y0) ,x=DoseNum))+
+  geom_smooth(data=res[Compostition=="polyculture"][rho%in%c(1)][alpha==1][time==max(time)][State%in%c("TotA","TotN")],
+              se=F,method="gam",formula=y~s(x,k=5),col="black",aes(size=2.5,group=interaction(rho,State)))+ 
+  
+  geom_smooth(se=F,method="gam",formula=y~s(x,k=5),aes(col=State , fill=State,size=(rho),group=interaction(rho,State)))+ scale_size(name="Facilitation (%)", breaks=c(0,0.5,1),labels = 100*(c(0,0.5,1)), range = c(0.5, 1.4))+
+  facet_grid(~State,labeller = labeller(State = cell.labs))+theme_classic()+
+  #geom_line(aes(col=State , fill=State,size=(rho),group=interaction(rho,State)))+ scale_size(name="Facilitation (%)", breaks=c(0,0.5,1),labels = 100*(c(0,0.5,1)), range = c(0.5, 1.4))+facet_grid()+theme_classic()+
+  geom_point(data=fit.dd_tt[Day==21][Compostition=="polyculture"], aes(y=log(1+value) ,x=DoseNum ,fill=State2 ),colour="black",pch=21,size=2.5)+
+  scale_color_manual(values=c("red","green","blue"),guide = FALSE)+ 
+  scale_fill_manual(values=c("red","green","blue"),guide = FALSE)+
+  geom_hline(yintercept = log(1+max(y0) ),col="slategrey", linetype="dashed",size=1.5)+theme(aspect.ratio=1)+
+  labs(y="Final abundance",x="Drug dose")+scale_y_continuous(labels=
+                                                     function(x) format(exp(x)-1, scientific = FALSE)
+                                                   #c(0,1e0,1e1,1e2,1e3,1e4,100000,1e6,1e7,1e8)
+                                                   ,breaks=log(1+c(0,1e0,1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8)))
+
+
+
+
+
+
+
+##########
+
+ggplot( res[Compostition=="polyculture"][][alpha==1][time==max(time)][State%in%c("TotA","TotN","E")],aes(y=log(y0) ,x=rho))+
+  geom_line(aes(col=State , fill=State,linetype=as.factor(-DoseNum),group=interaction(DoseNum,State)))+facet_grid(~State)+theme_classic()+
+  geom_point(data=fit.dd_tt[Day==21][Compostition=="polyculture"], aes(y=log(value) ,x=1 ,col=State ))
+
+
+
+ggplot( res[Compostition=="polyculture"][][alpha==1][time==max(time)],aes(y=log(1+y0) ,x=rho,col=DoseNum ,group=interaction(DoseNum,State),fill=State))+
+  geom_line()+facet_grid(~State)
+
+
+ggplot( res[Compostition=="polyculture"][DoseNum%in% c(0,400,1000)][rho%in%c(0.5,1)],aes(y=log(1+y0) ,x=time,col=State ,linetype=as.factor(-rho),group=interaction(rho,State),fill=State))+
+  geom_line()+facet_grid(DoseNum~alpha)
+
+
+ggplot( res[Compostition=="polyculture"][DoseNum%in% c(0,200,400,600)][time==21][State%in%c("TotA","TotN","E")],aes(y=log(1+y0) ,x=rho,col=State ,group=State,fill=State))+
+  geom_line()+facet_grid(DoseNum~alpha)+
+  scale_color_manual(values=c("green","red","blue"))+
+  geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )
+
+
+ggplot( res[Compostition=="polyculture"][DoseNum%in% c(0,400,1000)],aes(y=log(1+y0) ,x=time,col=State ,group=interaction(rho,State),fill=State))+
+  geom_line()+facet_grid(DoseNum~alpha)
+
+
+
+
+ggplot( res[Compostition=="polyculture"][DoseNum==200][time==max(time)],aes(y=log(1+y0) ,x=1-rho,col=State ,group=State,fill=State))+
+  geom_path()+facet_wrap(~alpha)
+
+
+
+ggplot(data= finabund_res, aes( y= log(1+y0), x= 100*rho , col= DoseNum,group=interaction(alpha,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap(Compostition ~ State)#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+ggplot(data= finabund_res, aes( y= log(1+Total), x= 100*rho , col= DoseNum,group=interaction(alpha,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap( ~ subclonespresent)#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+
+
+ggplot(data= finabund_res[DoseNum==200], aes( y= log(1+y0), x= 100*rho , col= log(CompA_relB),group=interaction(phi,alpha,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap(Compostition ~ State)#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+ggplot(data= finabund_res[DoseNum==200], aes( y= log(1+Total), x= 100*rho , col= alpha,group=interaction(alpha,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+
+  
+  
+  
+  geom_line( size=2, data= finabund_res[DoseNum==200][alpha==1], aes( y= log(1+Total), x= 100*rho , col= alpha,group=interaction(alpha,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+
+
+geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap( ~ subclonespresent)#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+
+
+
+ggplot(data= res[DoseNum==0], aes( y= log(1+y0), x= time , col= rho,group=interaction(rho,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+
+  theme_classic()+ labs(y= "State", x= "Time (days)")+
+  facet_wrap(Compostition ~ State,scales="free")#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+
+
+ggplot(data= res[], aes( y= log(1+y0), x= time , col= experim_unit,group=interaction(rho,experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+   geom_line()+
+   theme_classic()+ labs(y= "State", x= "Time (days)")+
+   facet_wrap(Compostition ~ State,scales="free")#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+ggplot(data= res[time==max(time)], aes( y= log(1+y0), x= 100*rho , col= DoseNum,group=interaction(experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap(Compostition ~ State,scales="free")#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+ggplot(data= res[time==max(time)][State!="E"], aes( y= log(1+y0), x= 100*rho , col= DoseNum,group=interaction(experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap(Compostition ~ State)#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+ggplot(data= res[time==max(time)][State=="E"], aes( y= log(1+y0), x= 100*rho , col= DoseNum,group=interaction(experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+#geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap(Compostition ~ State)#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+ggplot(data= res[time==max(time)][State=="E"], aes( y= log(1+y0), x= 100*rho , col= DoseNum,group=interaction(experim_unit) ,linetype=interaction(isNpresent,isApresent)) )+
+  geom_line()+#geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Facilitation level (fraction of unmodified state)")+
+  facet_wrap(Compostition ~ interaction(isNpresent,isApresent))#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+ggplot(data= res[time==max(time)][State=="E"], aes( y= log(1+y0),x= DoseNum,col=100*rho,group=interaction(isNpresent,isApresent,rho)     )   )+
+  geom_line()+#geom_hline(yintercept = log(1+max(y0) ),col="slategrey" )+
+  theme_classic()+ labs(y= "State", x= "Ribociclib dose")+
+  facet_wrap(Compostition ~ interaction(isNpresent,isApresent))#+#, labeller = as_labeller(facet_names))+ #theme(legend.position="none")
+
+
+# ggplot(pars.out, aes(x= gamma_A/gamma_N ) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= r_A/r_N ) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= delta_SA/delta_SN ) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= lambda_A/lambda_N ) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= delta_A/delta_N ) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= B_A/B_N ) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= k_A/k_N) ) + geom_histogram()+theme_classic()
+# ggplot(pars.out, aes(x= c_N) ) + geom_histogram()+theme_classic()
+# 
+# ggplot(pars.out, aes(x= gamma_A ) ) + geom_histogram()+
+#   geom_histogram(aes(x= gamma_N ))
+# 
+# #
+# # library(MASS)
+# # library(cluster)
+# #
+# # fit <- cov.mve(samples, quantile.used = nrow(samples) * 0.75)
+# #
+# # ellipse_boundary <- predict(ellipsoidhull(
+# #   as.matrix(M)[,3:4][
+# #   cov.mve(
+# #     as.matrix(M)[,3:4], quantile.used = round(nrow(M) * 0.75))$best,]
+# #   ))
+# # plot(exp(M[,3:4] ))
+# # lines(exp(ellipse_boundary), col="lightgreen", lwd=3)
+# # points((fitted_means[3] ),(fitted_means[4] ),cex=2,col="red",pch=16)
+# 
+# # summarise post
+# M <- log(pars.out%>%dplyr::select(r_N:delta,sigma))#-lp__))
+# covMat <- cov( M )
+# corMat <- cor(M, method="pearson")
+# fitted_means <- exp(colMeans(M))
+# 
+# #save(mean_credibleregion,fitted_means,M,covMat,file="/Users/jason/Downloads/Summarising posterior for Ribo fit Life history.Rdata")
+# library(ellipse) # References ellipse()
+# plot(0,0,pch="",xlim=c(-2,2),ylim=c(-2,2))
+# plot( ellipse( corMat, centre = log(fitted_means)) , col='red')
+# evals <- eigen(corMat)$values
+# evecs <- eigen(corMat)$vectors
+# # Angles of a circle
+# a <- seq(0, 2*pi, len=100)
+# 
+# # Get critical value
+# c2 <- qchisq(0.95, 2)
+# c <- sqrt(c2)
+# 
+# 
+# corMat
+# image(corMat)
+# 
+# covMat
+# 
+# 
+# 
+# dY_fun <- Life_History#function(t, y, pars, index_N, index_E,doses) {
+# # with( as.list( c(pars, y) ), {
+# #  N <- y[index_N]
+# #  A <- y[index_A]
+# #  E <- y[index_E]
+# #  d_N <- r_N*N*(1/(1 + B_N*doses))*(1 + E/(1 + c_N*E))*(1 - N/K_N - A/K_A) - deltaN*N # d_N <- r*N*(1/( 1 + B*doses ))*(1 + E/(1 + c*E))*(1 - N/k) #-deltaN*N
+# #  d_A <- r_A*A*(1/(1 + B_A*doses))*(1 + E/(1 + c_A*E))*(1 - N/K_N - A/K_A) - deltaA*A    
+# #  d_E <- gamma_N*N + gamma_A*A - delta*E
+# #  list(c(d_N, d_A, d_E))
+# #} )
+# #}
