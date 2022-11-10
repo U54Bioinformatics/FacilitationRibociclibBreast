@@ -1,20 +1,32 @@
 rm(list=ls())
 require(deSolve) ;require(ggplot2) ; require(tidyr) ; require(dplyr) ; require(data.table) 
-require(Matrix); require(fda); library("readr"); require(boot);
+require(Matrix); require(fda); library(readr); require(boot);
 require(stringr)
 require(loo)
-setwd("/Users/jason/Dropbox/Cancer_pheno_evo/data/Lab Facilitation/")
-filenms0<-list.files()
-filenms<-filenms0[][!grepl(pattern="old",filenms0)&grepl("Ribo",filenms0)]
 
-com<-rbindlist(lapply(1:length(filenms),function(x){
+## This script assumes all Bayesian models have already been fitted using the following scripts:
+ # "Fit Bayesian Competition alone model to coculutre spheroid growth trajectories under Ribociclib.R"                                              
+ # "Fit Bayesian Drug induced phenotype switching model to coculutre spheroid growth trajectories under Ribociclib.R"                               
+ # "Fit Bayesian Facilitation asymmetric 1D to coculutre spheroid growth trajectories under Ribociclib.R"                                           
+ # "Fit Bayesian Facilitation asymmetric 2D to coculutre spheroid growth trajectories under Ribociclib.R"                                           
+ # "Fit Bayesian Facilitation symmetric 1D Allee effect model to coculutre spheroid growth trajectories under Ribociclib.R"                         
+ # "Fit Bayesian Random phenotype switching model to coculutre spheroid growth trajectories under Ribociclib.R"                                     
+ # "Full Estradiol mediated facilitation model Fit Bayesian Facilitation asymmetric 3D to coculutre spheroid growth trajectories under Ribociclib.R"
+ # Rstan fitted models to test each hypothesis (each system of equations) should be stored in a object named "test" 
+ # It then assumes all model results (test objects) are stored in : "/Users/jason/Dropbox/Cancer_pheno_evo/data/Lab Facilitation/" in files with the prefix "Ribo"
+
+setwd("/Users/jason/Dropbox/Cancer_pheno_evo/data/Lab Facilitation/")
+filenms0 <- list.files()
+filenms <- filenms0[][!grepl(pattern="old",filenms0)&grepl("Ribo",filenms0)]
+
+com<- rbindlist(lapply(1:length(filenms),function(x){
   cat(x/length(filenms));cat("     ");
   load(file=filenms[x])
   log_lik_1=extract_log_lik(test, merge_chains = F)
   r_eff_1=relative_eff(log_lik_1)
   loo_1 <- waic(log_lik_1)
   res<-data.table(as.data.table(loo_1$ estimates,keep.rownames = T),mod=filenms[x])
-  return(res)#sum(loo_1$ pointwise[,"waic"])
+  return(res) 
 }))
 com[,ucl:=Estimate+1.96*SE]
 com[,lcl:=Estimate-1.96*SE]
@@ -31,7 +43,6 @@ com$Model <- factor(com$Model, levels = rev(c("Facilitation (LH1)","Facilitation
                                           "Plasticity (DI)","Subclonal evolution")))
 
 com[,Modelgroup:="Facilitation"]
-
 com[Model%in%c("Plasticity (DI)","Plasticity (GC)"),Modelgroup:="Plasticity"]
 com[Model%in%c("Subclonal evolution"),Modelgroup:="Selection"]
 
@@ -54,6 +65,3 @@ p4Blank <- ggplot(com[rn=="waic"][Model!="old"] ,aes(x=Estimate,y=Model,col=Mode
                               strip.text.x = element_blank(),legend.position="none")
 
 ggsave(p4Blank,filename ="/Users/jason/Dropbox/Cancer_pheno_evo/images and presentations/Lab Facilitation/Model comparisons BLANK.png")
-
-
-

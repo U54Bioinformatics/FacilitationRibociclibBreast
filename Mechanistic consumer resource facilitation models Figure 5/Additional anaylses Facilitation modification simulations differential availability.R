@@ -2,37 +2,13 @@ rm(list=ls())
 require(deSolve) ;require(ggplot2) ; require(tidyr) ; require(dplyr) ; require(data.table) 
 require(Matrix); require(fda); library("readr"); require(boot);
 require(stringr)
+
+# Summarised results of the fitted full model of estradiol mediated facilitation.
+# To be loaded after running the fitting code in :Full Estradiol mediated facilitation model Fit Bayesian Facilitation asymmetric 3D to coculutre spheroid growth trajectories under Ribociclib.R
 load(file="/Users/jason/Dropbox/Cancer_pheno_evo/data/Lab Facilitation/parameterised LH full pars and core data for simulation studies.RData")     
 
-
 #Load data 
-everolimus_dd <- data.table(read.csv(file = "~/Dropbox/Vince data/processed data/Sorted_everolimus_coculture_4-10-19_5-2-19.csv"))
-new_ribo_dd <- data.table(read.csv(file="~/Dropbox/Vince data/processed data/riboadavo/Sorted_190711_start_ribociclib_exp_analyzed_8-13-19.csv"))
-ribo_dd <- data.table(read.csv(file="~/Dropbox/Vince data/processed data/riboadavo/Sorted_Ribo_Adavo.csv"))
-#calc_params <- data.table(read.csv(file = "~/Dropbox/Vince data/Fitted Model Params/Everolimus Params/Final6Models_params.csv"))
-#top5 <- data.table(read.csv(file="~/Dropbox/Vince data/Fitted Model Params/Top5PureCultureParams.csv"))
-#happycells_dd <- data.table(read.csv(file="~/Dropbox/Vince data/Fitted Model Params/GrowthFacilitation2.csv"))
-# #Function to determine what model will be used in the loop
-# Model <- function(model_nm){
-#   switch(model_nm, 
-#          "CE"=CE_benefits,
-#          "CE_GC"=CE_GC_benefits,
-#          "CE_alpha"=CE_alpha_benefits,
-#          "Growth_Facilitation"=Growth_Facilitation_benefits)
-# }
-
-#Function to determine what experimental data will be used
-Experiment <- function(type){
-  switch(type,
-         "ribo" = ribo_dd,
-         "everolimus" = everolimus_dd,
-         "new_ribo" = new_ribo_dd)
-}
-
-#Select Data to use... it is in a semi wide format (not long nor a dense matrix)
-desiredexp <- "new_ribo"#"everolimus" #options: "ribo", "everolimus", "new_ribo"
-Experiment_Data <- Experiment(desiredexp) ; if(desiredexp == "ribo"){ Experiment_Data <- Experiment_Data[Drug == "ribociclib"] }
-Experiment_Data <- Experiment_Data#[Day!=0]
+Experiment_Data <- data.table(read.csv(file="~/Dropbox/Vince data/processed data/riboadavo/Sorted_190711_start_ribociclib_exp_analyzed_8-13-19.csv"))
 Experiment_Data[,Day:=Day - min(Day)]
 Experiment_Data[,Compostition:="polyculture"]
 Experiment_Data[Resistance%in%c("100% sensitive","100% resistant"),Compostition:="monoculture"]
@@ -94,7 +70,6 @@ Info$State <- gsub("N_","N",    gsub("A_","A", Info$State))
 
 pars.outlong <- data.table(gather(pars.out,par,val,r_RbyN:k_RbyN))
 pars.outlong$par <- factor(pars.outlong$par, levels = rev(c("gamma_RbyN","k_RbyN","r_RbyN","lambda_RbyN","B_RbyN","delta_SRbySN","delta_RbyN")))
-ggplot(pars.outlong, aes(y=log(val),x= par ,col=par,fill=par) ) + geom_violin()+theme_classic()
 
 ggplot(pars.outlong[!par%in%c("delta_SRbySN","delta_RbyN")], aes(y=log(val),x= par ,col=par,fill=par) ) + geom_violin(scale="width",bw=.015)+theme_classic(base_size = 19)+
   theme(aspect.ratio=1,legend.position = "none")+coord_flip()+
@@ -293,25 +268,6 @@ ggplot( res[Compostition=="polyculture"][omega%in%c(0.0,0.5,1)][alpha==1][rho%in
                                                      function(x) format(exp(x)-1, scientific = FALSE)
                                                    #c(0,1e0,1e1,1e2,1e3,1e4,100000,1e6,1e7,1e8)
                                                    ,breaks=log(1+c(0,1e0,1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8)))
-
-cell.labs <- c("Resistant", "Sensitive")
-names(cell.labs) <- c("TotA","TotN")
-ggplot( res[Compostition=="polyculture"][rho%in%c(0.0,0.5,1)][alpha==1][time==max(time)][State%in%c("TotA","TotN")],aes(y=log(1+y0) ,x=DoseNum))+
-  geom_smooth(data=res[Compostition=="polyculture"][rho%in%c(1)][alpha==1][time==max(time)][State%in%c("TotA","TotN")],
-              se=F,method="gam",formula=y~s(x,k=5),col="black",aes(size=2.5,group=interaction(rho,State)))+ 
-  
-  geom_smooth(se=F,method="gam",formula=y~s(x,k=5),aes(col=State , fill=State,size=(rho),group=interaction(rho,State)))+ scale_size(name="Facilitation (%)", breaks=c(0,0.5,1),labels = 100*(c(0,0.5,1)), range = c(0.5, 1.4))+
-  facet_grid(~State,labeller = labeller(State = cell.labs))+theme_classic()+
-  #geom_line(aes(col=State , fill=State,size=(rho),group=interaction(rho,State)))+ scale_size(name="Facilitation (%)", breaks=c(0,0.5,1),labels = 100*(c(0,0.5,1)), range = c(0.5, 1.4))+facet_grid()+theme_classic()+
-  geom_point(data=fit.dd_tt[Day==21][Compostition=="polyculture"], aes(y=log(1+value) ,x=DoseNum ,fill=State2 ),colour="black",pch=21,size=2.5)+
-  scale_color_manual(values=c("red","green","blue"),guide = FALSE)+ 
-  scale_fill_manual(values=c("red","green","blue"),guide = FALSE)+
-  geom_hline(yintercept = log(1+max(y0) ),col="slategrey", linetype="dashed",size=1.5)+theme(aspect.ratio=1)+
-  labs(y="Final abundance",x="Drug dose")+scale_y_continuous(labels=
-                                                               function(x) format(exp(x)-1, scientific = FALSE)
-                                                             #c(0,1e0,1e1,1e2,1e3,1e4,100000,1e6,1e7,1e8)
-                                                             ,breaks=log(1+c(0,1e0,1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8)))
-
 
 
 ######
