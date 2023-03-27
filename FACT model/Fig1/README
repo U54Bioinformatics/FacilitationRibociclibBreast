@@ -1,0 +1,19 @@
+FACTc.R generates the data and calls
+  allread.R which calls readc.R
+  functions.R
+  step125c.R
+  step3c.R
+  step46c.R
+  makedat.R
+
+##### Figure 1 #####
+Fig1.R (Fig1.pdf)
+
+##### Figure 1 #####
+Fig3.R (Fig3.pdf)
+
+##### Supp Fig 8 #####
+suppfig8.R calls noestra.R
+
+##### Supp Fig 8 #####
+suppfig9.R calls noestra.R

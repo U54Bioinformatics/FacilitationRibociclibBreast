@@ -1,0 +1,5 @@
+Run these programs!
+  Estradiol.R: Create the data frame Eresults to analyze, calls Ereadm.R
+  Eanal.R: Analyze Estradiol data 
+  Fig2c.R: Creates Fig2c.pdf
+

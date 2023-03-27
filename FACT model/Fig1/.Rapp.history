@@ -1,0 +1,36 @@
+source("FACTc.R")
+source("Fig1.R")
+source("Fig3.R")
+source("suppfig8.R")
+source("suppfig9.R")
+source("suppfig8.R")
+source("suppfig9.R")
+q()
+head(allfacil)
+objects(pat="facil")
+dim(camafacil)
+camafacil
+camafacil
+renafacil <- subset(allfacil,label="modfacil" & file %in% c("Estradiol1","Fulvestrant3"))
+renafacil <- subset(camafacil,label="modfacil" & file %in% c("Estradiol1","Fulvestrant3"))
+dim(renafacil)
+rena
+renafacil
+renafacil <- subset(camafacil,label=="modfacil" & file %in% c("Estradiol1","Fulvestrant3"))
+renafacil
+renafacil$label <- NULL#
+renafacil$goodlabel <- NULL#
+renafacil$lograt <- log(renafacil$cells/renafacil$null)
+renafacil
+head(camafacil)
+table(camafacil$label)
+ribofacil
+ribofacil <-  subset(camafacil,label=="ribofacil")#
+ribofacil$label <- NULL#
+ribofacil$goodlabel <- NULL#
+ribofacil$lograt <- log(ribofacil$cells/ribofacil$null)
+ribofacil
+plot(lograt ~ as.factor(type),ribofacil)
+write.csv(renafacil,file="mod.csv",quote=FALSE)
+write.csv(ribofacil,file="ribo.csv",quote=FALSE)
+q()

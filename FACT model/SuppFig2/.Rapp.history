@@ -1,0 +1,188 @@
+ls()
+source("FACTl.R")
+source("ly2figs.R"0
+source("ly2figs.R")
+ls()
+facilS
+objects(pat="facil")
+LY2facilitation
+tmpR
+facilR
+facilS
+tmpm
+merge(facilS,LY2facilitation[,c("day","nullS")],by="day")
+tmp <- subset(LY2facilitation,ilvl1==3)
+merge(facilS,tmp[,c("day","nullS")],by="day")
+facilS <- merge(facilS,tmp[,c("day","nullS")],by="day")
+facilS$logSrat <- log(facilS$cells/facilS$nullS)
+facilS
+facilR <- merge(facilR,tmp[,c("day","nullR")],by="day")#
+facilR$logRrat <- log(facilR$cells/facilR$nullR)
+facilR
+names(facilS)
+tnms <- names(facilS)[1:10]
+names(facilS) <- c(tnms,null,lograt)
+names(facilS) <- c(tnms,"null","lograt")
+names(facilR) <- c(tnms,"null","lograt")
+facilS
+facilly <- rbind(facilS,facilR)
+facilly
+vyrange <- c(-1.5,1.5)#
+faxissize <- 1.2#
+flabsize <- 1.3#
+fnamesize <- 1.7#
+fmainsize <- 1.3#
+yfudge <- 0.3#
+par(mar=c(9,5,4,2))
+dy <- 18#
+    boxplot(lograt ~ as.factor(type),subset(facilly,day==dy),#
+        col=camacols,#
+        ylim=vyrange,#
+        ylab="Strength of facilitation",#
+        xaxt="n",xlab="",#
+        cex.lab=flabsize,cex.axis=faxissize,cex.names=fnamesize)#
+    title(main="Facilitation of sensitive cells under treatment",#
+         cex.main=fmainsize)#
+    abline(h=0,lwd=2,lty=2,col="gray")#
+    axis(1, labels = FALSE)#
+    labels <- names(camacols)#
+    text(x =  seq_along(labels), y = par("usr")[3]-yfudge, srt = 45,#
+         adj = 1,labels = labels, xpd = TRUE,cex=flabsize)#
+par(mar=c(5,5,4,2))
+LY2cols
+vyrange <- c(-1.5,1.5)#
+faxissize <- 1.2#
+flabsize <- 1.3#
+fnamesize <- 1.7#
+fmainsize <- 1.3#
+yfudge <- 0.3#
+par(mar=c(9,5,4,2))#
+dy <- 18#
+    boxplot(lograt ~ as.factor(type),subset(facilly,day==dy),#
+        col=LY2cols,#
+        ylim=vyrange,#
+        ylab="Strength of facilitation",#
+        xaxt="n",xlab="",#
+        cex.lab=flabsize,cex.axis=faxissize,cex.names=fnamesize)#
+    title(main="Facilitation of sensitive cells under treatment",#
+         cex.main=fmainsize)#
+    abline(h=0,lwd=2,lty=2,col="gray")#
+    axis(1, labels = FALSE)#
+    labels <- names(LY2cols)#
+    text(x =  seq_along(labels), y = par("usr")[3]-yfudge, srt = 45,#
+         adj = 1,labels = labels, xpd = TRUE,cex=flabsize)#
+par(mar=c(5,5,4,2))
+reorder
+?reorder
+facilly$type <- factor(facilly$type,levels=c("S","R"))
+vyrange <- c(-1.5,1.5)#
+faxissize <- 1.2#
+flabsize <- 1.3#
+fnamesize <- 1.7#
+fmainsize <- 1.3#
+yfudge <- 0.3#
+par(mar=c(9,5,4,2))#
+dy <- 18#
+    boxplot(lograt ~ as.factor(type),subset(facilly,day==dy),#
+        col=LY2cols,#
+        ylim=vyrange,#
+        ylab="Strength of facilitation",#
+        xaxt="n",xlab="",#
+        cex.lab=flabsize,cex.axis=faxissize,cex.names=fnamesize)#
+    title(main="Facilitation of sensitive cells under treatment",#
+         cex.main=fmainsize)#
+    abline(h=0,lwd=2,lty=2,col="gray")#
+    axis(1, labels = FALSE)#
+    labels <- names(LY2cols)#
+    text(x =  seq_along(labels), y = par("usr")[3]-yfudge, srt = 45,#
+         adj = 1,labels = labels, xpd = TRUE,cex=flabsize)#
+par(mar=c(5,5,4,2))
+source("boxly.R)
+"
+'
+)
+]
+}
+"
+''
+source("boxly.R")
+source("FACTm.R")
+objects(pat="mcf7")
+objects(pat="MCF7")
+source("mcf7figs.R")
+objects(pat="MCF7")
+objects(pat="mcf7")
+facilS
+facilR
+mcf7facilitation
+MCF7cols
+mcf7cols
+facilS
+tmp <- subset(mcf7facilitation,ilvl1==4)#
+ tnms <- names(facilS)[1:10]#
+ facilS <- merge(facilS,tmp[,c("day","nullS")],by="day")#
+ facilS$logSrat <- log(facilS$cells/facilS$nullS)#
+ names(facilS) <- c(tnms,"null","lograt")#
+ facilR <- merge(facilR,tmp[,c("day","nullR")],by="day")#
+ facilR$logRrat <- log(facilR$cells/facilR$nullR)#
+ names(facilR) <- c(tnms,"null","lograt")#
+ facilmcf7 <- rbind(facilS,facilR)#
+ facilmcf7$type <- factor(facilmcf7$type,levels=c("S","R"))
+facilmcf7
+vyrange <- c(-1.5,1.5)#
+faxissize <- 1.2#
+flabsize <- 1.3#
+fnamesize <- 1.7#
+fmainsize <- 1.3#
+yfudge <- 0.3#
+par(mar=c(9,5,4,2))#
+dy <- 18#
+    boxplot(lograt ~ as.factor(type),subset(facilmcf7,day==dy),#
+        col=mcf7cols,#
+        ylim=vyrange,#
+        ylab="Strength of facilitation",#
+        xaxt="n",xlab="",#
+        cex.lab=flabsize,cex.axis=faxissize,cex.names=fnamesize)#
+    title(main="Facilitation under treatment",#
+         cex.main=fmainsize)#
+    abline(h=0,lwd=2,lty=2,col="gray")#
+    axis(1, labels = FALSE)#
+    labels <- names(mcf7cols)#
+    text(x =  seq_along(labels), y = par("usr")[3]-yfudge, srt = 45,#
+         adj = 1,labels = labels, xpd = TRUE,cex=flabsize)#
+par(mar=c(5,5,4,2))
+subset(facilmcf7,day==dy)
+tnms
+names(facilmcf7)[1:2] <- names(facilmcf7)[2:1]
+vyrange <- c(-1.5,1.5)#
+faxissize <- 1.2#
+flabsize <- 1.3#
+fnamesize <- 1.7#
+fmainsize <- 1.3#
+yfudge <- 0.3#
+par(mar=c(9,5,4,2))#
+dy <- 18#
+    boxplot(lograt ~ as.factor(type),subset(facilmcf7,day==dy),#
+        col=mcf7cols,#
+        ylim=vyrange,#
+        ylab="Strength of facilitation",#
+        xaxt="n",xlab="",#
+        cex.lab=flabsize,cex.axis=faxissize,cex.names=fnamesize)#
+    title(main="Facilitation under treatment",#
+         cex.main=fmainsize)#
+    abline(h=0,lwd=2,lty=2,col="gray")#
+    axis(1, labels = FALSE)#
+    labels <- names(mcf7cols)#
+    text(x =  seq_along(labels), y = par("usr")[3]-yfudge, srt = 45,#
+         adj = 1,labels = labels, xpd = TRUE,cex=flabsize)#
+par(mar=c(5,5,4,2))
+source("boxly.R")
+source("boxmcf7.R")
+q()
+facilmcf7
+write.csv(facilmcf7,file="MCF7.csv",quote=FALSE)
+facilly
+write.csv(facilLY2,file="LY2.csv",quote=FALSE)
+write.csv(facillyy,file="LY2.csv",quote=FALSE)
+write.csv(facilly,file="LY2.csv",quote=FALSE)
+q()

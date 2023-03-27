@@ -1,0 +1,39 @@
+Supplementary Figure 2b: 
+  Run FACTl.R and ly2figs.R to make LY2figs.pdf
+  FACTl.R calls
+     functions.R
+     growthreadl.R
+     readl.R
+     step125l.R
+     step3l.R
+     step46l.R
+  These read the following files
+     LYraw <- read.csv("../DATA/coculture.csv",header=TRUE)
+     Areasc <- read.csv("../DATA/LYarea.csv",header=FALSE)
+     Sfluorsc <- read.csv("../DATA/LYSfluor.csv",header=FALSE)
+     Rfluorsc <- read.csv("../DATA/LYRfluor.csv",header=FALSE)
+     Areasc <- read.csv("../DATA/LYarea.csv",header=FALSE)
+     Sfluorsc <- read.csv("../DATA/LYSfluor.csv",header=FALSE)
+     Rfluorsc <- read.csv("../DATA/LYRfluor.csv",header=FALSE)
+
+Supplementary Figure 2d: 
+  Run FACTm.R and mcf72figs.R to make MCF7figs.pdf
+  FACTm.R calls
+     functions.R
+     growthreadm.R
+     readm.R
+     step125m.R
+     step3m.R
+     step46m.R
+  These read the following files
+     gmn <- read.csv("../DATA/growth_curves_feb25_2021.csv",header=TRUE)
+     Areasm <- read.csv("../DATA/AreanewMCF7.csv",header=FALSE)
+     Fractionsm <- read.csv("../DATA/FractionnewMCF7.csv",header=FALSE)
+     Sfluorsm <- read.csv("../DATA/MCF7_Sfluor.csv",header=FALSE)
+     Rfluorsm <- read.csv("../DATA/MCF7_Rfluor.csv",header=FALSE)
+     Sc <- read.csv("../DATA/SMCF7.csv",header=FALSE)
+     Rc <- read.csv("../DATA/RMCF7.csv",header=FALSE)
+     Sc <- read.csv("../DATA/SnewMCF7.csv",header=FALSE)
+     Rc <- read.csv("../DATA/RnewMCF7.csv",header=FALSE)
+     Areasc <- read.csv("../DATA/AreanewMCF7.csv",header=FALSE)
+     Fractionsc <- read.csv("../DATA/FractionnewMCF7.csv",header=FALSE)

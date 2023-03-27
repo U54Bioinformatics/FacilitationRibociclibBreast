@@ -1,0 +1,5 @@
+setwd("/Users/adler 1/Desktop/Simmering/emond/forgit/demo")
+source("FACTc.R")
+source("Fig1.R")
+ls()
+q()

@@ -1,0 +1,9 @@
+To create Supplementary Figure 7 (charcoal.pdf)
+  Run suppfig7.R, which calls
+    functions.R
+    readcharcoal.R
+    step125charcoal.R
+  This reads in the data
+    Sc <- read.csv("../DATA/SCharcoal.csv",header=FALSE)
+    Rc <- read.csv("../DATA/RCharcoal.csv",header=FALSE)
+

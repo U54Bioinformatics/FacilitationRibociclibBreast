@@ -1,0 +1,14 @@
+This generates Figure 1 for CAMA-1 cells with Estradiol treatment
+It runs in less than one minute
+
+FACTc.R generates the data: You just need to type source("FACTc.R")
+  allread.R which calls readc.R
+  functions.R
+  step125c.R
+  step3c.R
+  step46c.R
+
+##### Figure 1 #####
+You just need to type source("Fig1.R")
+Fig1.R (Fig1.pdf)
+

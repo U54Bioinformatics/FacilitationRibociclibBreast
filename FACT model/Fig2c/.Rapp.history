@@ -1,0 +1,7 @@
+ls()
+source("Estradiol.R")
+source("Eanal.R")
+source("Fig2c.R")
+Efun2
+print(summary(lm(Estradiol ~ Epred2-1,Egood)))
+q()
